@@ -1,58 +1,118 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# IslaSource Seafoods API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Laravel 13 API with admin-only Sanctum bearer authentication. The Next.js admin
+uses these endpoints for login, profile verification and logout. Business-data
+integration and the public storefront backend remain separate phases.
 
-## About Laravel
+## Local setup
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Keep your configured `.env` database settings. Apply the additive migrations:
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
-
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+```powershell
+php artisan migrate
+php artisan admin:create
+php artisan serve --host=127.0.0.1 --port=8000
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+`admin:create` asks for a name, email and hidden password/confirmation. Optional
+`--name` and `--email` arguments are supported. Passwords require at least 12
+characters and, with bcrypt, at most 72 bytes. There is no default admin password,
+public registration endpoint, or password argument exposed to shell history.
+Existing accounts are never overwritten or elevated by this command; existing
+users receive `is_admin=false` when the migration is applied.
 
-## Contributing
+Optional settings (defaults already work locally):
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```dotenv
+ADMIN_APP_URL=http://localhost:3001
+SANCTUM_EXPIRATION=720
+```
 
-## Code of Conduct
+`ADMIN_APP_URL` is the exact allowed browser origin, including its scheme and port,
+without a trailing slash. CORS does not allow credential cookies. Token lifetime
+is measured in minutes; the default is 12 hours. After changing configuration,
+run `php artisan config:clear` locally. In production, use HTTPS, disable debug
+output, and run the Laravel scheduler so expired tokens are pruned daily.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Authentication contract
 
-## Security Vulnerabilities
+Base path: `/api/v1/admin/auth`. Send `Accept: application/json` and JSON request
+bodies with `Content-Type: application/json`. API errors remain JSON even if the
+Accept header is omitted.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+| Method | Path | Behavior |
+| --- | --- | --- |
+| POST | `/login` | Validate credentials and issue an admin token |
+| GET | `/me` | Return the authenticated admin's safe profile |
+| POST | `/logout` | Revoke the current token; return 204 |
+| POST | `/logout-all` | Revoke all tokens belonging to this admin; return 204 |
+| GET | `/tokens` | Paginated issued tokens belonging to this admin |
+| DELETE | `/tokens/{token}` | Revoke one owned token; return 204 |
 
-## License
+Only `/login` is public. All other endpoints require:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```http
+Authorization: Bearer <access_token>
+```
+
+Login body (replace with the account you created):
+
+```json
+{
+  "email": "you@example.com",
+  "password": "<your-admin-password>",
+  "device_name": "Admin browser"
+}
+```
+
+`device_name` is optional and defaults to `admin-web`. A successful login returns:
+
+```json
+{
+  "data": {
+    "user": { "id": 1, "name": "Your name", "email": "you@example.com" },
+    "access_token": "<returned-on-login-only>",
+    "token_type": "Bearer",
+    "expires_at": "2026-11-13T12:00:00.000000Z"
+  }
+}
+```
+
+The plaintext token is returned only on login. Only its hash is stored. Token
+listing returns safe metadata, including expiry, last use and `is_current`, with
+15 records per page and Laravel `links`/`meta` pagination. It never returns token
+hashes, plaintext tokens or another admin's records. Issued tokens remain listed
+until revoked or pruned; expired tokens cannot authenticate.
+
+Missing, invalid, expired or revoked tokens return 401. Disabled/non-admin users
+or tokens without the `admin` ability receive 403 on protected routes. Rejected
+login credentials return the same generic 422 error regardless of account
+existence or admin status. Unknown/unowned token IDs return 404. Rate limits return
+429 with retry headers: 5 login requests per normalized email+IP per minute,
+20 per IP per minute, and 120 protected requests per admin per minute.
+
+Auth responses use `Cache-Control: no-store`. The API has no stateful Sanctum
+SPA domains, session guard fallback, CSRF-cookie bootstrap route, or refresh token
+endpoint. Expiry requires another login. The Next.js admin sends the bearer header
+and stores only the token and expiry in tab-scoped sessionStorage; stored grants
+are verified before restored workspace access.
+
+## Code responsibilities
+
+- `app/Http/Requests/Api/V1/Admin/Auth/LoginRequest.php`: input validation and email normalization.
+- `app/Http/Controllers/Api/V1/Admin/Auth/`: HTTP coordination only.
+- `app/Services/Admin/`: credential checks, token lifecycle and admin provisioning.
+- `app/Http/Resources/Api/V1/Admin/Auth/`: explicit response fields and `TokenCollection`.
+- `app/Http/Middleware/`: active admin/ability enforcement and auth response cache control.
+- `app/Policies/PersonalAccessTokenPolicy.php`: token ownership authorization.
+
+## Verification
+
+```powershell
+php artisan test --compact
+php vendor/bin/pint --dirty --format agent
+composer audit
+```
+
+Tests use real bearer headers and an isolated in-memory SQLite database forced by
+`phpunit.xml`; they do not reset the database configured in your local `.env`.
