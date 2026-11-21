@@ -2,8 +2,11 @@
 
 use App\Http\Controllers\Api\V1\Admin\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Admin\Auth\TokenController;
+use App\Http\Controllers\Api\V1\Admin\Products\ProductController;
+use App\Http\Controllers\Api\V1\Admin\Products\ProductImageController;
 use App\Http\Middleware\EnsureActiveAdmin;
 use App\Http\Middleware\PreventAuthResponseCaching;
+use App\Models\Product;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1/admin/auth')->name('api.v1.admin.auth.')
@@ -20,4 +23,19 @@ Route::prefix('v1/admin/auth')->name('api.v1.admin.auth.')
                 Route::delete('/tokens/{token}', [TokenController::class, 'destroy'])
                     ->whereNumber('token')->name('tokens.destroy');
             });
+    });
+
+Route::bind('archivedProduct', fn (string $id): Product => Product::onlyTrashed()->findOrFail($id));
+
+Route::prefix('v1/admin')->name('api.v1.admin.')
+    ->middleware([PreventAuthResponseCaching::class, 'auth:sanctum', EnsureActiveAdmin::class, 'throttle:admin-api'])
+    ->group(function (): void {
+        Route::get('/products', [ProductController::class, 'index'])->name('products.index');
+        Route::post('/products', [ProductController::class, 'store'])->name('products.store');
+        Route::get('/products/{product}', [ProductController::class, 'show'])->whereNumber('product')->name('products.show');
+        Route::patch('/products/{product}', [ProductController::class, 'update'])->whereNumber('product')->name('products.update');
+        Route::delete('/products/{product}', [ProductController::class, 'destroy'])->whereNumber('product')->name('products.destroy');
+        Route::post('/products/{archivedProduct}/restore', [ProductController::class, 'restore'])
+            ->whereNumber('archivedProduct')->name('products.restore');
+        Route::post('/product-images', [ProductImageController::class, 'store'])->name('product-images.store');
     });

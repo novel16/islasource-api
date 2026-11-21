@@ -2,7 +2,7 @@
 
 return [
     'paths' => ['api/*'],
-    'allowed_methods' => ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    'allowed_methods' => ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     'allowed_origins' => [env('ADMIN_APP_URL', 'http://localhost:3001')],
     'allowed_origins_patterns' => [],
     'allowed_headers' => ['Accept', 'Authorization', 'Content-Type'],
