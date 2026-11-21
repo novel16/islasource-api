@@ -4,6 +4,9 @@ use App\Http\Controllers\Api\V1\Admin\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Admin\Auth\TokenController;
 use App\Http\Controllers\Api\V1\Admin\Products\ProductController;
 use App\Http\Controllers\Api\V1\Admin\Products\ProductImageController;
+use App\Http\Controllers\Api\V1\Admin\Rfqs\RfqController as AdminRfqController;
+use App\Http\Controllers\Api\V1\PublicCatalog\GuestRfqController;
+use App\Http\Controllers\Api\V1\PublicCatalog\PublicProductController;
 use App\Http\Middleware\EnsureActiveAdmin;
 use App\Http\Middleware\PreventAuthResponseCaching;
 use App\Models\Product;
@@ -27,6 +30,16 @@ Route::prefix('v1/admin/auth')->name('api.v1.admin.auth.')
 
 Route::bind('archivedProduct', fn (string $id): Product => Product::onlyTrashed()->findOrFail($id));
 
+Route::prefix('v1')->name('api.v1.')
+    ->group(function (): void {
+        Route::get('/seafood', [PublicProductController::class, 'index'])
+            ->middleware('throttle:60,1')->name('seafood.index');
+        Route::get('/seafood/{slug}', [PublicProductController::class, 'show'])
+            ->where('slug', '[a-z0-9-]+')->middleware('throttle:60,1')->name('seafood.show');
+        Route::post('/quote-requests', [GuestRfqController::class, 'store'])
+            ->middleware('throttle:6,1')->name('quote-requests.store');
+    });
+
 Route::prefix('v1/admin')->name('api.v1.admin.')
     ->middleware([PreventAuthResponseCaching::class, 'auth:sanctum', EnsureActiveAdmin::class, 'throttle:admin-api'])
     ->group(function (): void {
@@ -38,4 +51,6 @@ Route::prefix('v1/admin')->name('api.v1.admin.')
         Route::post('/products/{archivedProduct}/restore', [ProductController::class, 'restore'])
             ->whereNumber('archivedProduct')->name('products.restore');
         Route::post('/product-images', [ProductImageController::class, 'store'])->name('product-images.store');
+        Route::get('/rfqs', [AdminRfqController::class, 'index'])->name('rfqs.index');
+        Route::get('/rfqs/{rfq}', [AdminRfqController::class, 'show'])->whereNumber('rfq')->name('rfqs.show');
     });
