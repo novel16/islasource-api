@@ -17,6 +17,8 @@ class Rfq extends Model
     /** @use HasFactory<RfqFactory> */
     use HasFactory;
 
+    public const array STATUSES = ['New', 'Reviewing', 'Ready', 'Quoted', 'Closed'];
+
     /** @return array<string, string> */
     protected function casts(): array
     {
@@ -27,5 +29,11 @@ class Rfq extends Model
     public function items(): HasMany
     {
         return $this->hasMany(RfqItem::class);
+    }
+
+    /** @return HasMany<RfqNote, $this> */
+    public function notes(): HasMany
+    {
+        return $this->hasMany(RfqNote::class)->orderBy('id');
     }
 }

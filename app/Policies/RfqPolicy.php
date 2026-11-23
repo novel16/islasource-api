@@ -36,7 +36,7 @@ class RfqPolicy
      */
     public function update(User $user, Rfq $rfq): bool
     {
-        return false;
+        return $user->is_admin && $user->is_active;
     }
 
     /**

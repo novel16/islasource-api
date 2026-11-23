@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\Product;
 use App\Models\Rfq;
+use App\Models\RfqNote;
+use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -99,6 +101,30 @@ class RfqService
 
     public function findOrFail(int $id): Rfq
     {
-        return Rfq::query()->with('items')->findOrFail($id);
+        return Rfq::query()->with(['items', 'notes.author'])->findOrFail($id);
+    }
+
+    public function updateStatus(Rfq $rfq, string $status): Rfq
+    {
+        return DB::transaction(function () use ($rfq, $status): Rfq {
+            $locked = Rfq::query()->lockForUpdate()->findOrFail($rfq->id);
+            $locked->status = $status;
+            $locked->save();
+
+            return $locked->refresh()->load(['items', 'notes.author']);
+        });
+    }
+
+    public function addNote(Rfq $rfq, User $author, string $body): RfqNote
+    {
+        return DB::transaction(function () use ($rfq, $author, $body): RfqNote {
+            $locked = Rfq::query()->lockForUpdate()->findOrFail($rfq->id);
+            $note = $locked->notes()->create([
+                'user_id' => $author->id,
+                'body' => $body,
+            ]);
+
+            return $note->load('author');
+        });
     }
 }

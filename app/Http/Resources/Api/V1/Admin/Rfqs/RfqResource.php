@@ -28,6 +28,7 @@ class RfqResource extends JsonResource
             'notes' => $this->customer_notes ?? '',
             'status' => $this->status,
             'items' => $this->whenLoaded('items', fn (): AnonymousResourceCollection => RfqItemResource::collection($this->items)),
+            'internal_notes' => $this->whenLoaded('notes', fn (): AnonymousResourceCollection => RfqNoteResource::collection($this->notes)),
             'created_at' => $this->created_at?->toISOString(),
         ];
     }

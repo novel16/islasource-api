@@ -53,4 +53,6 @@ Route::prefix('v1/admin')->name('api.v1.admin.')
         Route::post('/product-images', [ProductImageController::class, 'store'])->name('product-images.store');
         Route::get('/rfqs', [AdminRfqController::class, 'index'])->name('rfqs.index');
         Route::get('/rfqs/{rfq}', [AdminRfqController::class, 'show'])->whereNumber('rfq')->name('rfqs.show');
+        Route::patch('/rfqs/{rfq}', [AdminRfqController::class, 'update'])->whereNumber('rfq')->name('rfqs.update');
+        Route::post('/rfqs/{rfq}/notes', [AdminRfqController::class, 'storeNote'])->whereNumber('rfq')->name('rfqs.notes.store');
     });

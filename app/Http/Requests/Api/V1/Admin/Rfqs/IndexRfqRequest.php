@@ -26,7 +26,7 @@ class IndexRfqRequest extends FormRequest
     {
         return [
             'search' => ['nullable', 'string', 'max:100'],
-            'status' => ['nullable', 'string', Rule::in(['New'])],
+            'status' => ['nullable', 'string', Rule::in(Rfq::STATUSES)],
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
