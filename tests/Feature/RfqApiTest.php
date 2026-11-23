@@ -1,5 +1,7 @@
 <?php
 
+use App\Mail\RfqReceivedAdminMail;
+use App\Mail\RfqReceivedCustomerMail;
 use App\Models\Product;
 use App\Models\Rfq;
 use App\Models\RfqItem;
@@ -7,6 +9,7 @@ use App\Models\User;
 use App\Policies\RfqPolicy;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 
 uses(LazilyRefreshDatabase::class);
 
@@ -231,4 +234,122 @@ it('keeps guest RFQ submission public response free of internal fields', functio
 
     expect(array_keys($response->json('data')))->toBe(['reference']);
     $this->assertDatabaseHas('rfqs', ['reference' => $response->json('data.reference'), 'status' => 'New']);
+});
+
+it('enforces a maximum of 10 items on guest quote requests', function () {
+    $items = collect(range(1, 11))->map(fn (int $index): array => [
+        'product_id' => null,
+        'name' => "Seafood item {$index}",
+        'quantity' => 1,
+        'unit' => 'kg',
+        'notes' => '',
+    ])->all();
+
+    $this->postJson('/api/v1/quote-requests', [
+        'customer_name' => 'Maia Reyes',
+        'email' => 'maia@example.com',
+        'phone' => '+63 917 555 0148',
+        'location' => 'Cebu City',
+        'requested_delivery_date' => null,
+        'notes' => '',
+        'terms_accepted' => true,
+        'items' => $items,
+    ])->assertUnprocessable()->assertJsonValidationErrors('items');
+
+    $this->assertDatabaseCount('rfqs', 0);
+});
+
+it('emails the customer with their reference number and notifies only active admins when a guest submits a quote request', function () {
+    Mail::fake();
+
+    $activeAdminOne = User::factory()->admin()->create(['email' => 'admin1@islasource.test']);
+    $activeAdminTwo = User::factory()->admin()->create(['email' => 'admin2@islasource.test']);
+    $inactiveAdmin = User::factory()->admin()->create(['email' => 'inactive@islasource.test', 'is_active' => false]);
+    $regularUser = User::factory()->create(['email' => 'regular@islasource.test', 'is_admin' => false, 'is_active' => true]);
+
+    $product = Product::factory()->create([
+        'name' => 'Danggit Buwad (Dried)',
+        'status' => 'Published',
+        'unit' => 'kg',
+        'min_order_quantity' => '1.000',
+    ]);
+
+    $response = $this->postJson('/api/v1/quote-requests', [
+        'customer_name' => 'Maia Reyes',
+        'email' => 'maia@example.com',
+        'phone' => '+63 917 555 0148',
+        'location' => 'Cebu City, Cebu',
+        'requested_delivery_date' => '2026-12-05',
+        'notes' => 'Please pack per 1 kg.',
+        'terms_accepted' => true,
+        'items' => [[
+            'product_id' => $product->id,
+            'name' => $product->name,
+            'quantity' => 3.5,
+            'unit' => 'kg',
+            'notes' => 'Medium size',
+        ]],
+    ])->assertCreated();
+
+    $reference = $response->json('data.reference');
+    $rfq = Rfq::query()->where('reference', $reference)->firstOrFail();
+
+    Mail::assertSent(RfqReceivedCustomerMail::class, 1);
+    Mail::assertSent(RfqReceivedCustomerMail::class, function (RfqReceivedCustomerMail $mail) use ($reference): bool {
+        $html = $mail->render();
+
+        return $mail->hasTo('maia@example.com')
+            && str_contains($mail->envelope()->subject, $reference)
+            && str_contains($html, $reference)
+            && str_contains($html, 'Danggit Buwad (Dried)')
+            && str_contains($html, '3.5 kg');
+    });
+
+    Mail::assertSent(RfqReceivedAdminMail::class, 2);
+    Mail::assertSent(RfqReceivedAdminMail::class, function (RfqReceivedAdminMail $mail) use ($activeAdminOne, $rfq, $reference): bool {
+        $html = $mail->render();
+
+        return $mail->hasTo($activeAdminOne->email)
+            && str_contains($mail->envelope()->subject, $reference)
+            && str_contains($html, 'Maia Reyes')
+            && str_contains($html, 'maia@example.com')
+            && str_contains($html, '/rfqs/'.$rfq->id);
+    });
+    Mail::assertSent(RfqReceivedAdminMail::class, fn (RfqReceivedAdminMail $mail): bool => $mail->hasTo($activeAdminTwo->email));
+    Mail::assertNotSent(RfqReceivedAdminMail::class, fn (RfqReceivedAdminMail $mail): bool => $mail->hasTo($inactiveAdmin->email));
+    Mail::assertNotSent(RfqReceivedAdminMail::class, fn (RfqReceivedAdminMail $mail): bool => $mail->hasTo($regularUser->email));
+});
+
+it('still saves the guest quote request if email delivery fails', function () {
+    $originalMailer = Mail::getFacadeRoot();
+    Mail::shouldReceive('to')->andThrow(new RuntimeException('SMTP connection refused'));
+
+    User::factory()->admin()->create(['email' => 'admin@islasource.test']);
+    $product = Product::factory()->create(['status' => 'Published', 'min_order_quantity' => '1.000']);
+
+    try {
+        $response = $this->postJson('/api/v1/quote-requests', [
+            'customer_name' => 'Maia Reyes',
+            'email' => 'maia@example.com',
+            'phone' => '+63 917 555 0148',
+            'location' => 'Cebu City',
+            'requested_delivery_date' => null,
+            'notes' => '',
+            'terms_accepted' => true,
+            'items' => [[
+                'product_id' => $product->id,
+                'name' => $product->name,
+                'quantity' => 2,
+                'unit' => $product->unit,
+                'notes' => '',
+            ]],
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('rfqs', [
+            'reference' => $response->json('data.reference'),
+            'status' => 'New',
+        ]);
+    } finally {
+        Mail::swap($originalMailer);
+    }
 });

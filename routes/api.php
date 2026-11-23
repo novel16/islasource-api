@@ -4,7 +4,9 @@ use App\Http\Controllers\Api\V1\Admin\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Admin\Auth\TokenController;
 use App\Http\Controllers\Api\V1\Admin\Products\ProductController;
 use App\Http\Controllers\Api\V1\Admin\Products\ProductImageController;
+use App\Http\Controllers\Api\V1\Admin\Quotations\QuotationController as AdminQuotationController;
 use App\Http\Controllers\Api\V1\Admin\Rfqs\RfqController as AdminRfqController;
+use App\Http\Controllers\Api\V1\PublicCatalog\GuestQuotationController;
 use App\Http\Controllers\Api\V1\PublicCatalog\GuestRfqController;
 use App\Http\Controllers\Api\V1\PublicCatalog\PublicProductController;
 use App\Http\Middleware\EnsureActiveAdmin;
@@ -38,6 +40,14 @@ Route::prefix('v1')->name('api.v1.')
             ->where('slug', '[a-z0-9-]+')->middleware('throttle:60,1')->name('seafood.show');
         Route::post('/quote-requests', [GuestRfqController::class, 'store'])
             ->middleware('throttle:6,1')->name('quote-requests.store');
+        Route::middleware(PreventAuthResponseCaching::class)->group(function (): void {
+            Route::get('/quotations/{token}', [GuestQuotationController::class, 'show'])
+                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:20,1')->name('quotations.show');
+            Route::post('/quotations/{token}/accept', [GuestQuotationController::class, 'accept'])
+                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:10,1')->name('quotations.accept');
+            Route::post('/quotations/{token}/decline', [GuestQuotationController::class, 'decline'])
+                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:10,1')->name('quotations.decline');
+        });
     });
 
 Route::prefix('v1/admin')->name('api.v1.admin.')
@@ -55,4 +65,13 @@ Route::prefix('v1/admin')->name('api.v1.admin.')
         Route::get('/rfqs/{rfq}', [AdminRfqController::class, 'show'])->whereNumber('rfq')->name('rfqs.show');
         Route::patch('/rfqs/{rfq}', [AdminRfqController::class, 'update'])->whereNumber('rfq')->name('rfqs.update');
         Route::post('/rfqs/{rfq}/notes', [AdminRfqController::class, 'storeNote'])->whereNumber('rfq')->name('rfqs.notes.store');
+        Route::post('/rfqs/{rfq}/quotations', [AdminQuotationController::class, 'store'])->whereNumber('rfq')->name('rfqs.quotations.store');
+        Route::get('/quotations', [AdminQuotationController::class, 'index'])->name('quotations.index');
+        Route::get('/quotations/{quotation}', [AdminQuotationController::class, 'show'])->whereNumber('quotation')->name('quotations.show');
+        Route::patch('/quotations/{quotation}', [AdminQuotationController::class, 'update'])->whereNumber('quotation')->name('quotations.update');
+        Route::delete('/quotations/{quotation}', [AdminQuotationController::class, 'destroy'])->whereNumber('quotation')->name('quotations.destroy');
+        Route::post('/quotations/{quotation}/send', [AdminQuotationController::class, 'send'])->whereNumber('quotation')->name('quotations.send');
+        Route::post('/quotations/{quotation}/resend', [AdminQuotationController::class, 'resend'])->whereNumber('quotation')->name('quotations.resend');
+        Route::post('/quotations/{quotation}/cancel', [AdminQuotationController::class, 'cancel'])->whereNumber('quotation')->name('quotations.cancel');
+        Route::post('/quotations/{quotation}/revise', [AdminQuotationController::class, 'revise'])->whereNumber('quotation')->name('quotations.revise');
     });

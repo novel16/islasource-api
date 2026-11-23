@@ -36,4 +36,10 @@ class Rfq extends Model
     {
         return $this->hasMany(RfqNote::class)->orderBy('id');
     }
+
+    /** @return HasMany<Quotation, $this> */
+    public function quotations(): HasMany
+    {
+        return $this->hasMany(Quotation::class)->orderByDesc('version');
+    }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Api\V1\Admin\Rfqs;
 
+use App\Http\Resources\Api\V1\Admin\Quotations\QuotationSummaryResource;
 use App\Models\Rfq;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -29,6 +30,7 @@ class RfqResource extends JsonResource
             'status' => $this->status,
             'items' => $this->whenLoaded('items', fn (): AnonymousResourceCollection => RfqItemResource::collection($this->items)),
             'internal_notes' => $this->whenLoaded('notes', fn (): AnonymousResourceCollection => RfqNoteResource::collection($this->notes)),
+            'quotations' => $this->whenLoaded('quotations', fn (): AnonymousResourceCollection => QuotationSummaryResource::collection($this->quotations)),
             'created_at' => $this->created_at?->toISOString(),
         ];
     }
