@@ -22,7 +22,7 @@ class UpdateQuotationRequest extends FormRequest
             'handling_centavos' => ['required', 'integer', 'min:0', 'max:999999999'],
             'markup_percent' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:1000'],
             'delivery_centavos' => ['required', 'integer', 'min:0', 'max:999999999'],
-            'deposit_percent' => ['required', 'integer', 'min:0', 'max:100'],
+            'deposit_percent' => ['sometimes', 'integer', 'min:0', 'max:100'],
             'validity_hours' => ['required', 'integer', 'min:1', 'max:720'],
             'terms' => ['nullable', 'string', 'max:2000'],
             'items' => ['required', 'array', 'min:1', 'max:20'],

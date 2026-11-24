@@ -19,9 +19,7 @@ Currently unavailable (not charged):
 
 Seafood subtotal: {{ $formatPeso($quotation->subtotal_centavos) }}
 Delivery: {{ $formatPeso($quotation->delivery_centavos) }}
-Total quotation: {{ $formatPeso($quotation->total_centavos) }}
-Required deposit ({{ $quotation->deposit_percent }}%): {{ $formatPeso($quotation->deposit_centavos) }}
-Remaining balance before dispatch: {{ $formatPeso($quotation->balance_centavos) }}
+Total quotation (Full payment via QR Ph): {{ $formatPeso($quotation->total_centavos) }}
 @if($validUntilManila)
 Valid until: {{ $validUntilManila }}
 @endif

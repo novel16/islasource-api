@@ -35,6 +35,8 @@ class PublicQuotationResource extends JsonResource
             'declined_at' => $this->declined_at?->toISOString(),
             'decline_reason' => $this->decline_reason ?? '',
             'cancelled_at' => $this->cancelled_at?->toISOString(),
+            'order_reference' => $this->relationLoaded('order') && $this->order !== null ? $this->order->reference : null,
+            'order_token' => $this->relationLoaded('order') && $this->order !== null ? $this->order->access_token_encrypted : null,
         ];
     }
 }

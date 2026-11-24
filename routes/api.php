@@ -2,13 +2,16 @@
 
 use App\Http\Controllers\Api\V1\Admin\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Admin\Auth\TokenController;
+use App\Http\Controllers\Api\V1\Admin\Orders\OrderController as AdminOrderController;
 use App\Http\Controllers\Api\V1\Admin\Products\ProductController;
 use App\Http\Controllers\Api\V1\Admin\Products\ProductImageController;
 use App\Http\Controllers\Api\V1\Admin\Quotations\QuotationController as AdminQuotationController;
 use App\Http\Controllers\Api\V1\Admin\Rfqs\RfqController as AdminRfqController;
+use App\Http\Controllers\Api\V1\PublicCatalog\GuestOrderController;
 use App\Http\Controllers\Api\V1\PublicCatalog\GuestQuotationController;
 use App\Http\Controllers\Api\V1\PublicCatalog\GuestRfqController;
 use App\Http\Controllers\Api\V1\PublicCatalog\PublicProductController;
+use App\Http\Controllers\Api\V1\Webhooks\PayMongoWebhookController;
 use App\Http\Middleware\EnsureActiveAdmin;
 use App\Http\Middleware\PreventAuthResponseCaching;
 use App\Models\Product;
@@ -47,7 +50,15 @@ Route::prefix('v1')->name('api.v1.')
                 ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:10,1')->name('quotations.accept');
             Route::post('/quotations/{token}/decline', [GuestQuotationController::class, 'decline'])
                 ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:10,1')->name('quotations.decline');
+            Route::get('/orders/{token}', [GuestOrderController::class, 'show'])
+                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:20,1')->name('orders.show');
+            Route::post('/orders/{token}/checkout', [GuestOrderController::class, 'checkout'])
+                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:10,1')->name('orders.checkout');
+            Route::post('/orders/{token}/verify-payment', [GuestOrderController::class, 'verifyPayment'])
+                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:20,1')->name('orders.verify-payment');
         });
+        Route::post('/webhooks/paymongo', [PayMongoWebhookController::class, 'handle'])
+            ->middleware('throttle:120,1')->name('webhooks.paymongo');
     });
 
 Route::prefix('v1/admin')->name('api.v1.admin.')
@@ -74,4 +85,7 @@ Route::prefix('v1/admin')->name('api.v1.admin.')
         Route::post('/quotations/{quotation}/resend', [AdminQuotationController::class, 'resend'])->whereNumber('quotation')->name('quotations.resend');
         Route::post('/quotations/{quotation}/cancel', [AdminQuotationController::class, 'cancel'])->whereNumber('quotation')->name('quotations.cancel');
         Route::post('/quotations/{quotation}/revise', [AdminQuotationController::class, 'revise'])->whereNumber('quotation')->name('quotations.revise');
+        Route::get('/orders', [AdminOrderController::class, 'index'])->name('orders.index');
+        Route::get('/orders/{order}', [AdminOrderController::class, 'show'])->whereNumber('order')->name('orders.show');
+        Route::patch('/orders/{order}', [AdminOrderController::class, 'update'])->whereNumber('order')->name('orders.update');
     });

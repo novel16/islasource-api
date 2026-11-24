@@ -67,6 +67,15 @@ class QuotationResource extends JsonResource
                 $this->relationLoaded('rfq') && $this->rfq->relationLoaded('quotations'),
                 fn (): AnonymousResourceCollection => QuotationSummaryResource::collection($this->rfq->quotations),
             ),
+            'order' => $this->when(
+                $this->relationLoaded('order') && $this->order !== null,
+                fn (): array => [
+                    'id' => (int) $this->order->id,
+                    'reference' => $this->order->reference,
+                    'status' => $this->order->status,
+                    'payment_status' => $this->order->payment_status,
+                ],
+            ),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];

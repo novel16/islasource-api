@@ -69,16 +69,8 @@
                         <td style="text-align:right;">{{ $formatPeso($quotation->delivery_centavos) }}</td>
                     </tr>
                     <tr>
-                        <td style="padding-top:10px;border-top:1px solid #dfe5da;font-weight:700;font-size:16px;">Total quotation</td>
+                        <td style="padding-top:10px;border-top:1px solid #dfe5da;font-weight:700;font-size:16px;">Total quotation (Full payment via QR Ph)</td>
                         <td style="padding-top:10px;border-top:1px solid #dfe5da;text-align:right;font-weight:700;font-size:16px;color:#1e4d40;">{{ $formatPeso($quotation->total_centavos) }}</td>
-                    </tr>
-                    <tr>
-                        <td style="color:#55665d;">Required deposit ({{ $quotation->deposit_percent }}%)</td>
-                        <td style="text-align:right;font-weight:600;">{{ $formatPeso($quotation->deposit_centavos) }}</td>
-                    </tr>
-                    <tr>
-                        <td style="color:#55665d;">Remaining balance before dispatch</td>
-                        <td style="text-align:right;">{{ $formatPeso($quotation->balance_centavos) }}</td>
                     </tr>
                 </table>
 

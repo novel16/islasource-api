@@ -76,6 +76,7 @@ it('exposes only customer-facing quotation fields with Cache-Control no-store', 
         'deposit_percent', 'deposit_centavos', 'balance_centavos',
         'validity_hours', 'valid_until', 'terms',
         'sent_at', 'accepted_at', 'declined_at', 'decline_reason', 'cancelled_at',
+        'order_reference', 'order_token',
     ]);
     expect(array_keys($response->json('data.items.0')))->toEqualCanonicalizing([
         'id', 'product_name', 'unit', 'quantity', 'specs', 'is_available', 'line_selling_centavos',

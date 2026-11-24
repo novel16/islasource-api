@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'rfq_id', 'reference', 'version', 'status',
@@ -39,9 +40,9 @@ class Quotation extends Model
 
     public const int DEFAULT_VALIDITY_HOURS = 48;
 
-    public const int DEFAULT_DEPOSIT_PERCENT = 50;
+    public const int DEFAULT_DEPOSIT_PERCENT = 100;
 
-    public const string DEFAULT_TERMS = '50% deposit confirms your order. Balance is due before dispatch. Availability is confirmed upon deposit.';
+    public const string DEFAULT_TERMS = 'Full payment via QR Ph is required upon quotation acceptance before island sourcing begins.';
 
     /** @return array<string, string> */
     protected function casts(): array
@@ -85,5 +86,11 @@ class Quotation extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** @return HasOne<Order, $this> */
+    public function order(): HasOne
+    {
+        return $this->hasOne(Order::class);
     }
 }

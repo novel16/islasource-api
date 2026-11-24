@@ -19,7 +19,10 @@ use Throwable;
 
 class QuotationService
 {
-    public function __construct(private readonly QuotationCalculator $calculator) {}
+    public function __construct(
+        private readonly QuotationCalculator $calculator,
+        private readonly OrderService $orders,
+    ) {}
 
     public function shareUrl(Quotation $quotation): ?string
     {
@@ -135,11 +138,11 @@ class QuotationService
             }
 
             $nextVersion = ((int) $lockedRfq->quotations()->max('version')) + 1;
-            $depositPercent = isset($defaults['deposit_percent']) ? (int) $defaults['deposit_percent'] : Quotation::DEFAULT_DEPOSIT_PERCENT;
+            $depositPercent = Quotation::DEFAULT_DEPOSIT_PERCENT;
             $validityHours = isset($defaults['validity_hours']) ? (int) $defaults['validity_hours'] : Quotation::DEFAULT_VALIDITY_HOURS;
             $terms = isset($defaults['terms']) && trim((string) $defaults['terms']) !== ''
                 ? trim((string) $defaults['terms'])
-                : "{$depositPercent}% deposit confirms your order. Balance is due before dispatch. Availability is confirmed upon deposit.";
+                : Quotation::DEFAULT_TERMS;
 
             $quotation = Quotation::query()->create([
                 'rfq_id' => $lockedRfq->id,
@@ -187,7 +190,7 @@ class QuotationService
         $this->expireOverdue($quotation->rfq_id);
         $quotation->refresh();
 
-        return $quotation->load(['rfq.quotations', 'items']);
+        return $quotation->load(['rfq.quotations', 'items', 'order']);
     }
 
     /** @param array<string, mixed> $attributes */
@@ -236,7 +239,7 @@ class QuotationService
                 handlingCentavos: (int) $attributes['handling_centavos'],
                 markupPercent: $attributes['markup_percent'],
                 deliveryCentavos: (int) $attributes['delivery_centavos'],
-                depositPercent: (int) $attributes['deposit_percent'],
+                depositPercent: Quotation::DEFAULT_DEPOSIT_PERCENT,
             );
 
             $locked->fill([
@@ -247,7 +250,7 @@ class QuotationService
                 'subtotal_centavos' => $totals['subtotal_centavos'],
                 'delivery_centavos' => $totals['delivery_centavos'],
                 'total_centavos' => $totals['total_centavos'],
-                'deposit_percent' => (int) $attributes['deposit_percent'],
+                'deposit_percent' => Quotation::DEFAULT_DEPOSIT_PERCENT,
                 'deposit_centavos' => $totals['deposit_centavos'],
                 'balance_centavos' => $totals['balance_centavos'],
                 'validity_hours' => (int) $attributes['validity_hours'],
@@ -491,7 +494,7 @@ class QuotationService
     public function findForGuest(string $token): Quotation
     {
         $quotation = Quotation::query()
-            ->with(['rfq', 'items'])
+            ->with(['rfq', 'items', 'order'])
             ->where('access_token_hash', hash('sha256', $token))
             ->where('status', '!=', 'Draft')
             ->first();
@@ -500,7 +503,7 @@ class QuotationService
             throw (new ModelNotFoundException)->setModel(Quotation::class);
         }
 
-        return $this->refreshExpiry($quotation)->load(['rfq', 'items']);
+        return $this->refreshExpiry($quotation)->load(['rfq', 'items', 'order']);
     }
 
     public function acceptByGuest(string $token): Quotation
@@ -536,7 +539,9 @@ class QuotationService
                 'accepted_at' => now(),
             ])->save();
 
-            return $quotation->refresh()->load(['rfq', 'items']);
+            $this->orders->createFromAcceptedQuotation($quotation);
+
+            return $quotation->refresh()->load(['rfq', 'items', 'order']);
         });
     }
 
