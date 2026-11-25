@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Mail\OrderMessageNotificationMail;
 use App\Mail\OrderPaidAdminMail;
 use App\Mail\OrderPaidCustomerMail;
 use App\Mail\OrderStatusUpdatedMail;
 use App\Models\Order;
+use App\Models\OrderMessage;
 use App\Models\OrderPayment;
 use App\Models\Quotation;
 use App\Models\User;
@@ -58,6 +60,7 @@ class OrderService
             'customer_phone' => $quotation->rfq->customer_phone,
             'delivery_location' => $quotation->rfq->delivery_location,
             'requested_delivery_date' => $quotation->rfq->requested_delivery_date,
+            'confirmed_delivery_date' => $quotation->confirmed_delivery_date ?? $quotation->rfq->proposed_delivery_date ?? $quotation->rfq->requested_delivery_date,
             'subtotal_centavos' => $quotation->subtotal_centavos,
             'delivery_centavos' => $quotation->delivery_centavos,
             'total_centavos' => $quotation->total_centavos,
@@ -100,13 +103,13 @@ class OrderService
 
     public function findForAdmin(Order $order): Order
     {
-        return $order->load(['quotation.items', 'rfq', 'payments']);
+        return $order->load(['quotation.items', 'rfq', 'payments', 'messages']);
     }
 
     public function findForGuest(string $token): Order
     {
         $order = Order::query()
-            ->with(['quotation.items', 'payments'])
+            ->with(['quotation.items', 'payments', 'messages'])
             ->where('access_token_hash', hash('sha256', $token))
             ->first();
 
@@ -183,7 +186,92 @@ class OrderService
             );
         }
 
-        return $order->refresh()->load(['quotation.items', 'payments']);
+        return $order->refresh()->load(['quotation.items', 'payments', 'messages']);
+    }
+
+    public function addAdminMessage(Order $order, User $admin, string $body): OrderMessage
+    {
+        $message = DB::transaction(function () use ($order, $admin, $body): OrderMessage {
+            $locked = Order::query()->lockForUpdate()->findOrFail($order->id);
+
+            if (in_array($locked->status, ['Completed', 'Cancelled'], true)) {
+                throw ValidationException::withMessages([
+                    'status' => 'Messaging is closed for completed or cancelled orders.',
+                ]);
+            }
+
+            return $locked->messages()->create([
+                'sender_type' => 'admin',
+                'sender_user_id' => $admin->id,
+                'sender_name' => trim($admin->name) !== '' ? trim($admin->name) : 'IslaSource Seafoods',
+                'body' => trim($body),
+            ]);
+        });
+
+        $orderUrl = ($this->trackingUrl($order) ?? rtrim((string) config('app.frontend_url', 'http://localhost:3000'), '/')).'#messages';
+
+        try {
+            Mail::to($order->customer_email)->send(new OrderMessageNotificationMail($order, $message, $orderUrl, false));
+        } catch (Throwable $exception) {
+            Log::error('Failed to send order message notification to customer.', [
+                'order_id' => $order->id,
+                'reference' => $order->reference,
+                'exception' => $exception->getMessage(),
+            ]);
+        }
+
+        return $message;
+    }
+
+    public function addGuestMessage(string $token, string $body): OrderMessage
+    {
+        $result = DB::transaction(function () use ($token, $body): array {
+            $locked = Order::query()
+                ->where('access_token_hash', hash('sha256', $token))
+                ->lockForUpdate()
+                ->first();
+
+            if ($locked === null) {
+                throw (new ModelNotFoundException)->setModel(Order::class);
+            }
+
+            if (in_array($locked->status, ['Completed', 'Cancelled'], true)) {
+                throw ValidationException::withMessages([
+                    'status' => 'Messaging is closed for completed or cancelled orders.',
+                ]);
+            }
+
+            $message = $locked->messages()->create([
+                'sender_type' => 'customer',
+                'sender_user_id' => null,
+                'sender_name' => $locked->customer_name,
+                'body' => trim($body),
+            ]);
+
+            return ['order' => $locked, 'message' => $message];
+        });
+
+        /** @var Order $order */
+        $order = $result['order'];
+        /** @var OrderMessage $message */
+        $message = $result['message'];
+
+        $adminUrl = rtrim((string) config('app.admin_url', 'http://localhost:3001'), '/').'/orders/'.$order->id.'#messages';
+
+        foreach (User::activeAdminEmails() as $adminEmail) {
+            try {
+                Mail::to($adminEmail)->send(new OrderMessageNotificationMail($order, $message, $adminUrl, true));
+            } catch (Throwable $exception) {
+                Log::error('Failed to send order message notification to admin.', [
+                    'order_id' => $order->id,
+                    'reference' => $order->reference,
+                    'admin_email' => $adminEmail,
+                    'exception' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        return $message;
     }
 
     /** @param array<string, mixed> $payload */
@@ -277,7 +365,7 @@ class OrderService
                     'cancel_reason' => ($cancelReason ?? '') === '' ? null : trim($cancelReason),
                 ])->save();
 
-                return $locked->refresh()->load(['quotation.items', 'rfq', 'payments']);
+                return $locked->refresh()->load(['quotation.items', 'rfq', 'payments', 'messages']);
             }
 
             $allowedNext = [
@@ -309,7 +397,7 @@ class OrderService
                 $timestampField => now(),
             ])->save();
 
-            return $locked->refresh()->load(['quotation.items', 'rfq', 'payments']);
+            return $locked->refresh()->load(['quotation.items', 'rfq', 'payments', 'messages']);
         });
 
         if (in_array($transitioned->status, ['Packed', 'Dispatched', 'Completed'], true)) {
@@ -330,7 +418,7 @@ class OrderService
 
             if ($locked->payment_status === 'Paid') {
                 return [
-                    'order' => $locked->load(['quotation.items', 'payments']),
+                    'order' => $locked->load(['quotation.items', 'payments', 'messages']),
                     'newly_paid' => false,
                 ];
             }
@@ -368,7 +456,7 @@ class OrderService
             ])->save();
 
             return [
-                'order' => $locked->refresh()->load(['quotation.items', 'payments']),
+                'order' => $locked->refresh()->load(['quotation.items', 'payments', 'messages']),
                 'newly_paid' => true,
             ];
         });
@@ -426,17 +514,8 @@ class OrderService
         }
 
         $adminUrl = rtrim((string) config('app.admin_url', 'http://localhost:3001'), '/').'/orders/'.$order->id;
-        $adminEmails = User::query()
-            ->where('is_admin', true)
-            ->where('is_active', true)
-            ->whereNotNull('email')
-            ->where('email', '!=', '')
-            ->orderBy('id')
-            ->pluck('email')
-            ->unique()
-            ->values();
 
-        foreach ($adminEmails as $adminEmail) {
+        foreach (User::activeAdminEmails() as $adminEmail) {
             try {
                 Mail::to($adminEmail)->send(new OrderPaidAdminMail($order, $adminUrl));
             } catch (Throwable $exception) {

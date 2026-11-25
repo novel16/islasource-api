@@ -12,7 +12,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'quotation_id', 'rfq_id', 'reference', 'status', 'payment_status',
-    'customer_name', 'customer_email', 'customer_phone', 'delivery_location', 'requested_delivery_date',
+    'customer_name', 'customer_email', 'customer_phone', 'delivery_location',
+    'requested_delivery_date', 'confirmed_delivery_date',
     'subtotal_centavos', 'delivery_centavos', 'total_centavos', 'paid_centavos',
     'access_token_hash', 'access_token_encrypted',
     'paid_at', 'packed_at', 'dispatched_at', 'completed_at', 'cancelled_at', 'cancel_reason',
@@ -41,7 +42,8 @@ class Order extends Model
     protected function casts(): array
     {
         return [
-            'requested_delivery_date' => 'date',
+            'requested_delivery_date' => 'date:Y-m-d',
+            'confirmed_delivery_date' => 'date:Y-m-d',
             'subtotal_centavos' => 'integer',
             'delivery_centavos' => 'integer',
             'total_centavos' => 'integer',
@@ -71,5 +73,11 @@ class Order extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(OrderPayment::class)->orderByDesc('id');
+    }
+
+    /** @return HasMany<OrderMessage, $this> */
+    public function messages(): HasMany
+    {
+        return $this->hasMany(OrderMessage::class)->orderBy('id');
     }
 }

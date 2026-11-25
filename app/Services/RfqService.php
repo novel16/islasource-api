@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Mail\RfqReceivedAdminMail;
 use App\Mail\RfqReceivedCustomerMail;
+use App\Mail\RfqScheduleRespondedAdminMail;
+use App\Mail\RfqSupplyNoticeMail;
 use App\Models\Product;
 use App\Models\Quotation;
 use App\Models\Rfq;
@@ -11,6 +13,7 @@ use App\Models\RfqNote;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -20,6 +23,19 @@ use Throwable;
 
 class RfqService
 {
+    public function scheduleShareUrl(Rfq $rfq): ?string
+    {
+        $token = $rfq->schedule_token_encrypted;
+
+        if (! is_string($token) || $token === '') {
+            return null;
+        }
+
+        $frontendUrl = rtrim((string) config('app.frontend_url', 'http://localhost:3000'), '/');
+
+        return "{$frontendUrl}/request-update/{$token}";
+    }
+
     /** @param array<string, mixed> $attributes */
     public function submit(array $attributes): Rfq
     {
@@ -161,6 +177,178 @@ class RfqService
         });
     }
 
+    /**
+     * @param  array<string, mixed>  $attributes
+     * @return array{rfq: Rfq, email_sent: bool}
+     */
+    public function sendSupplyNotice(Rfq $rfq, array $attributes): array
+    {
+        $mode = (string) $attributes['mode'];
+
+        $updated = DB::transaction(function () use ($rfq, $attributes, $mode): Rfq {
+            $locked = Rfq::query()->lockForUpdate()->findOrFail($rfq->id);
+
+            Quotation::query()
+                ->where('rfq_id', $locked->id)
+                ->where('status', 'Sent')
+                ->whereNotNull('valid_until')
+                ->where('valid_until', '<', now())
+                ->update(['status' => 'Expired']);
+
+            if ($locked->quotations()->where('status', 'Accepted')->exists()) {
+                throw ValidationException::withMessages([
+                    'status' => 'This request already has an accepted quotation.',
+                ]);
+            }
+
+            if ($locked->quotations()->where('status', 'Sent')->exists()) {
+                throw ValidationException::withMessages([
+                    'status' => 'Withdraw the active sent quotation before sending a supply notice.',
+                ]);
+            }
+
+            $notice = trim((string) ($attributes['notice'] ?? ''));
+
+            if ($mode === 'reschedule') {
+                $plainToken = Str::random(64);
+                $locked->fill([
+                    'proposed_available_date' => $attributes['proposed_available_date'],
+                    'proposed_delivery_date' => $attributes['proposed_delivery_date'],
+                    'schedule_notice' => $notice === '' ? null : $notice,
+                    'status' => 'Waiting',
+                    'schedule_status' => 'Proposed',
+                    'schedule_responded_at' => null,
+                    'schedule_customer_note' => null,
+                    'schedule_token_hash' => hash('sha256', $plainToken),
+                    'schedule_token_encrypted' => $plainToken,
+                ])->save();
+            } else {
+                if ($locked->status === 'Closed') {
+                    throw ValidationException::withMessages([
+                        'status' => 'This request is already closed.',
+                    ]);
+                }
+
+                $locked->fill([
+                    'schedule_notice' => $notice === '' ? null : $notice,
+                    'status' => 'Closed',
+                    'schedule_status' => 'ClosedUnavailable',
+                    'schedule_token_hash' => null,
+                    'schedule_token_encrypted' => null,
+                ])->save();
+            }
+
+            return $locked->refresh()->load(['items', 'notes.author', 'quotations']);
+        });
+
+        $frontendUrl = rtrim((string) config('app.frontend_url', 'http://localhost:3000'), '/');
+        $actionUrl = $mode === 'reschedule'
+            ? ($this->scheduleShareUrl($updated) ?? "{$frontendUrl}/seafood")
+            : "{$frontendUrl}/seafood";
+
+        $emailSent = true;
+
+        try {
+            Mail::to($updated->customer_email)->send(new RfqSupplyNoticeMail($updated, $mode, $actionUrl));
+        } catch (Throwable $exception) {
+            $emailSent = false;
+            Log::error('Failed to send RFQ supply notice email to customer.', [
+                'rfq_id' => $updated->id,
+                'reference' => $updated->reference,
+                'mode' => $mode,
+                'exception' => $exception->getMessage(),
+            ]);
+        }
+
+        return [
+            'rfq' => $updated,
+            'email_sent' => $emailSent,
+        ];
+    }
+
+    public function findByScheduleToken(string $token): Rfq
+    {
+        $rfq = Rfq::query()
+            ->with('items')
+            ->where('schedule_token_hash', hash('sha256', $token))
+            ->first();
+
+        if ($rfq === null) {
+            throw (new ModelNotFoundException)->setModel(Rfq::class);
+        }
+
+        return $rfq;
+    }
+
+    public function respondToScheduleByGuest(string $token, string $decision, ?string $note = null): Rfq
+    {
+        $updated = DB::transaction(function () use ($token, $decision, $note): Rfq {
+            $locked = Rfq::query()
+                ->with('items')
+                ->where('schedule_token_hash', hash('sha256', $token))
+                ->lockForUpdate()
+                ->first();
+
+            if ($locked === null) {
+                throw (new ModelNotFoundException)->setModel(Rfq::class);
+            }
+
+            if ($locked->quotations()->where('status', 'Accepted')->exists()) {
+                throw ValidationException::withMessages([
+                    'schedule_status' => 'A quotation has already been accepted for this request.',
+                ]);
+            }
+
+            if ($locked->status === 'Closed' || $locked->schedule_status !== 'Proposed') {
+                throw ValidationException::withMessages([
+                    'schedule_status' => 'This schedule update has already been answered or is no longer open.',
+                ]);
+            }
+
+            $cleanNote = trim((string) ($note ?? ''));
+
+            if ($decision === 'accept') {
+                $locked->fill([
+                    'status' => 'Waiting',
+                    'schedule_status' => 'Accepted',
+                    'schedule_responded_at' => now(),
+                    'schedule_customer_note' => $cleanNote === '' ? null : $cleanNote,
+                ])->save();
+            } else {
+                $locked->fill([
+                    'status' => 'Closed',
+                    'schedule_status' => 'Declined',
+                    'schedule_responded_at' => now(),
+                    'schedule_customer_note' => $cleanNote === '' ? null : $cleanNote,
+                ])->save();
+            }
+
+            return $locked->refresh()->load('items');
+        });
+
+        $this->notifyScheduleResponded($updated);
+
+        return $updated;
+    }
+
+    private function notifyScheduleResponded(Rfq $rfq): void
+    {
+        $adminUrl = rtrim((string) config('app.admin_url', 'http://localhost:3001'), '/').'/rfqs/'.$rfq->id;
+
+        foreach (User::activeAdminEmails() as $adminEmail) {
+            try {
+                Mail::to($adminEmail)->send(new RfqScheduleRespondedAdminMail($rfq, $adminUrl));
+            } catch (Throwable $exception) {
+                Log::error('Failed to send RFQ schedule response email to admin.', [
+                    'rfq_id' => $rfq->id,
+                    'reference' => $rfq->reference,
+                    'admin_email' => $adminEmail,
+                    'exception' => $exception->getMessage(),
+                ]);
+            }
+        }
+    }
+
     private function notifySubmitted(Rfq $rfq): void
     {
         try {
@@ -174,17 +362,8 @@ class RfqService
         }
 
         $adminUrl = rtrim((string) config('app.admin_url', 'http://localhost:3001'), '/').'/rfqs/'.$rfq->id;
-        $adminEmails = User::query()
-            ->where('is_admin', true)
-            ->where('is_active', true)
-            ->whereNotNull('email')
-            ->where('email', '!=', '')
-            ->orderBy('id')
-            ->pluck('email')
-            ->unique()
-            ->values();
 
-        foreach ($adminEmails as $adminEmail) {
+        foreach (User::activeAdminEmails() as $adminEmail) {
             try {
                 Mail::to($adminEmail)->send(new RfqReceivedAdminMail($rfq, $adminUrl));
             } catch (Throwable $exception) {

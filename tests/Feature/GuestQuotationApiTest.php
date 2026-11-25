@@ -71,7 +71,7 @@ it('exposes only customer-facing quotation fields with Cache-Control no-store', 
     expect($response->headers->get('Cache-Control'))->toContain('no-store');
     expect(array_keys($response->json('data')))->toEqualCanonicalizing([
         'reference', 'rfq_reference', 'version', 'status',
-        'customer_name', 'delivery_location', 'requested_delivery_date',
+        'customer_name', 'delivery_location', 'requested_delivery_date', 'confirmed_delivery_date',
         'items', 'subtotal_centavos', 'delivery_centavos', 'total_centavos',
         'deposit_percent', 'deposit_centavos', 'balance_centavos',
         'validity_hours', 'valid_until', 'terms',

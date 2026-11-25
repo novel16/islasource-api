@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api\V1\PublicCatalog;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Api\V1\Orders\OrderMessageResource;
 use App\Http\Resources\Api\V1\PublicCatalog\PublicOrderResource;
 use App\Services\OrderService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
@@ -57,6 +59,26 @@ class GuestOrderController extends Controller
             return response()->json([
                 'message' => 'We could not verify payment status right now. Please refresh shortly.',
             ], 502);
+        }
+    }
+
+    public function storeMessage(Request $request, string $token): JsonResponse
+    {
+        $validated = validator(
+            ['body' => is_string($request->input('body')) ? trim($request->input('body')) : $request->input('body')],
+            ['body' => ['required', 'string', 'max:2000']],
+        )->validate();
+
+        try {
+            return (new OrderMessageResource($this->orders->addGuestMessage(
+                $token,
+                $validated['body'],
+            )))->response()->setStatusCode(201);
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'errors' => $exception->errors(),
+            ], 409);
         }
     }
 }

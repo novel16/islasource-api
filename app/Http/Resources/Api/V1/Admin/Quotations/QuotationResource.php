@@ -38,6 +38,7 @@ class QuotationResource extends JsonResource
             'deposit_percent' => (int) $this->deposit_percent,
             'deposit_centavos' => (int) $this->deposit_centavos,
             'balance_centavos' => (int) $this->balance_centavos,
+            'confirmed_delivery_date' => $this->confirmed_delivery_date?->toDateString(),
             'validity_hours' => (int) $this->validity_hours,
             'valid_until' => $this->valid_until?->toISOString(),
             'terms' => $this->terms ?? '',
@@ -61,6 +62,9 @@ class QuotationResource extends JsonResource
                 'phone' => $this->rfq->customer_phone,
                 'location' => $this->rfq->delivery_location,
                 'requested_delivery_date' => $this->rfq->requested_delivery_date?->toDateString(),
+                'proposed_available_date' => $this->rfq->proposed_available_date?->toDateString(),
+                'proposed_delivery_date' => $this->rfq->proposed_delivery_date?->toDateString(),
+                'schedule_status' => $this->rfq->schedule_status,
             ]),
             'items' => $this->whenLoaded('items', fn (): AnonymousResourceCollection => QuotationItemResource::collection($this->items)),
             'versions' => $this->when(

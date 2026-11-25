@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Api\V1\PublicCatalog;
 
+use App\Http\Resources\Api\V1\Orders\OrderMessageResource;
 use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -23,7 +24,9 @@ class PublicOrderResource extends JsonResource
             'customer_name' => $this->customer_name,
             'delivery_location' => $this->delivery_location,
             'requested_delivery_date' => $this->requested_delivery_date?->toDateString(),
+            'confirmed_delivery_date' => $this->confirmed_delivery_date?->toDateString(),
             'items' => PublicQuotationItemResource::collection($availableItems),
+            'messages' => $this->whenLoaded('messages', fn () => OrderMessageResource::collection($this->messages)),
             'subtotal_centavos' => (int) $this->subtotal_centavos,
             'delivery_centavos' => (int) $this->delivery_centavos,
             'total_centavos' => (int) $this->total_centavos,

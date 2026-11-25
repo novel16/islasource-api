@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Api\V1\Admin\Orders;
 
+use App\Http\Resources\Api\V1\Orders\OrderMessageResource;
 use App\Http\Resources\Api\V1\PublicCatalog\PublicQuotationItemResource;
 use App\Models\Order;
 use App\Services\OrderService;
@@ -32,6 +33,7 @@ class OrderResource extends JsonResource
             'phone' => $this->customer_phone,
             'location' => $this->delivery_location,
             'requested_delivery_date' => $this->requested_delivery_date?->toDateString(),
+            'confirmed_delivery_date' => $this->confirmed_delivery_date?->toDateString(),
             'subtotal_centavos' => (int) $this->subtotal_centavos,
             'delivery_centavos' => (int) $this->delivery_centavos,
             'total_centavos' => (int) $this->total_centavos,
@@ -50,6 +52,10 @@ class OrderResource extends JsonResource
             'payments' => $this->whenLoaded(
                 'payments',
                 fn (): AnonymousResourceCollection => OrderPaymentResource::collection($this->payments),
+            ),
+            'messages' => $this->whenLoaded(
+                'messages',
+                fn (): AnonymousResourceCollection => OrderMessageResource::collection($this->messages),
             ),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),

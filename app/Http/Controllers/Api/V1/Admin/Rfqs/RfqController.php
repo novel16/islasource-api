@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Admin\Rfqs;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Admin\Rfqs\IndexRfqRequest;
+use App\Http\Requests\Api\V1\Admin\Rfqs\SendRfqSupplyNoticeRequest;
 use App\Http\Requests\Api\V1\Admin\Rfqs\StoreRfqNoteRequest;
 use App\Http\Requests\Api\V1\Admin\Rfqs\UpdateRfqRequest;
 use App\Http\Resources\Api\V1\Admin\Rfqs\RfqCollection;
@@ -42,5 +43,12 @@ class RfqController extends Controller
             $request->user(),
             $request->validated('body'),
         )))->response()->setStatusCode(201);
+    }
+
+    public function sendSupplyNotice(SendRfqSupplyNoticeRequest $request, Rfq $rfq): RfqResource
+    {
+        $result = $this->rfqs->sendSupplyNotice($rfq, $request->validated());
+
+        return new RfqResource($result['rfq'], $result['email_sent']);
     }
 }

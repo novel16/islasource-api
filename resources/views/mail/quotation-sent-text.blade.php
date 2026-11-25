@@ -4,6 +4,9 @@ Hi {{ $rfq->customer_name }},
 
 Your seafood quotation {{ $quotation->reference }}@if($quotation->version > 1) (Version {{ $quotation->version }})@endif for request {{ $rfq->reference }} is ready.
 Delivery destination: {{ $rfq->delivery_location }}
+@if($quotation->confirmed_delivery_date)
+Confirmed delivery date: {{ $quotation->confirmed_delivery_date->format('M j, Y') }}
+@endif
 
 Quoted items:
 @foreach($availableItems as $item)

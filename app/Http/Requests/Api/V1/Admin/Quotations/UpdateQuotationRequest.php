@@ -23,6 +23,7 @@ class UpdateQuotationRequest extends FormRequest
             'markup_percent' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:1000'],
             'delivery_centavos' => ['required', 'integer', 'min:0', 'max:999999999'],
             'deposit_percent' => ['sometimes', 'integer', 'min:0', 'max:100'],
+            'confirmed_delivery_date' => ['nullable', 'date_format:Y-m-d'],
             'validity_hours' => ['required', 'integer', 'min:1', 'max:720'],
             'terms' => ['nullable', 'string', 'max:2000'],
             'items' => ['required', 'array', 'min:1', 'max:20'],
@@ -37,6 +38,10 @@ class UpdateQuotationRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        if ($this->input('confirmed_delivery_date') === '') {
+            $this->merge(['confirmed_delivery_date' => null]);
+        }
+
         if (is_string($this->input('terms'))) {
             $this->merge(['terms' => trim($this->input('terms'))]);
         }

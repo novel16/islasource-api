@@ -20,6 +20,7 @@ class PublicQuotationResource extends JsonResource
             'customer_name' => $this->rfq->customer_name,
             'delivery_location' => $this->rfq->delivery_location,
             'requested_delivery_date' => $this->rfq->requested_delivery_date?->toDateString(),
+            'confirmed_delivery_date' => $this->confirmed_delivery_date?->toDateString(),
             'items' => PublicQuotationItemResource::collection($this->items),
             'subtotal_centavos' => (int) $this->subtotal_centavos,
             'delivery_centavos' => (int) $this->delivery_centavos,

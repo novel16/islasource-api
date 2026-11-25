@@ -44,6 +44,10 @@ Route::prefix('v1')->name('api.v1.')
         Route::post('/quote-requests', [GuestRfqController::class, 'store'])
             ->middleware('throttle:6,1')->name('quote-requests.store');
         Route::middleware(PreventAuthResponseCaching::class)->group(function (): void {
+            Route::get('/quote-requests/schedule/{token}', [GuestRfqController::class, 'showSchedule'])
+                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:20,1')->name('quote-requests.schedule.show');
+            Route::post('/quote-requests/schedule/{token}/respond', [GuestRfqController::class, 'respondSchedule'])
+                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:10,1')->name('quote-requests.schedule.respond');
             Route::get('/quotations/{token}', [GuestQuotationController::class, 'show'])
                 ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:20,1')->name('quotations.show');
             Route::post('/quotations/{token}/accept', [GuestQuotationController::class, 'accept'])
@@ -56,6 +60,8 @@ Route::prefix('v1')->name('api.v1.')
                 ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:10,1')->name('orders.checkout');
             Route::post('/orders/{token}/verify-payment', [GuestOrderController::class, 'verifyPayment'])
                 ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:20,1')->name('orders.verify-payment');
+            Route::post('/orders/{token}/messages', [GuestOrderController::class, 'storeMessage'])
+                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:15,1')->name('orders.messages.store');
         });
         Route::post('/webhooks/paymongo', [PayMongoWebhookController::class, 'handle'])
             ->middleware('throttle:120,1')->name('webhooks.paymongo');
@@ -76,6 +82,7 @@ Route::prefix('v1/admin')->name('api.v1.admin.')
         Route::get('/rfqs/{rfq}', [AdminRfqController::class, 'show'])->whereNumber('rfq')->name('rfqs.show');
         Route::patch('/rfqs/{rfq}', [AdminRfqController::class, 'update'])->whereNumber('rfq')->name('rfqs.update');
         Route::post('/rfqs/{rfq}/notes', [AdminRfqController::class, 'storeNote'])->whereNumber('rfq')->name('rfqs.notes.store');
+        Route::post('/rfqs/{rfq}/supply-notice', [AdminRfqController::class, 'sendSupplyNotice'])->whereNumber('rfq')->name('rfqs.supply-notice');
         Route::post('/rfqs/{rfq}/quotations', [AdminQuotationController::class, 'store'])->whereNumber('rfq')->name('rfqs.quotations.store');
         Route::get('/quotations', [AdminQuotationController::class, 'index'])->name('quotations.index');
         Route::get('/quotations/{quotation}', [AdminQuotationController::class, 'show'])->whereNumber('quotation')->name('quotations.show');
@@ -88,4 +95,5 @@ Route::prefix('v1/admin')->name('api.v1.admin.')
         Route::get('/orders', [AdminOrderController::class, 'index'])->name('orders.index');
         Route::get('/orders/{order}', [AdminOrderController::class, 'show'])->whereNumber('order')->name('orders.show');
         Route::patch('/orders/{order}', [AdminOrderController::class, 'update'])->whereNumber('order')->name('orders.update');
+        Route::post('/orders/{order}/messages', [AdminOrderController::class, 'storeMessage'])->whereNumber('order')->name('orders.messages.store');
     });

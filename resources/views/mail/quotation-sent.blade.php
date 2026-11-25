@@ -21,7 +21,7 @@
             <td style="padding:24px 28px;">
                 <p style="margin:0 0 14px;">Hi {{ $rfq->customer_name }},</p>
                 <p style="margin:0 0 18px;color:#4a5a52;">
-                    Thank you for your quote request. We have checked current island availability and prepared your personal quotation for delivery to <strong>{{ $rfq->delivery_location }}</strong>.
+                    Thank you for your quote request. We have checked current island availability and prepared your personal quotation for delivery to <strong>{{ $rfq->delivery_location }}</strong>@if($quotation->confirmed_delivery_date) (target delivery: <strong>{{ $quotation->confirmed_delivery_date->format('M j, Y') }}</strong>)@endif.
                 </p>
 
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="8" style="border-collapse:collapse;border:1px solid #e4e8de;margin-bottom:18px;font-size:14px;">

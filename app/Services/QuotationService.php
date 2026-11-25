@@ -159,6 +159,7 @@ class QuotationService
                 'deposit_percent' => $depositPercent,
                 'deposit_centavos' => 0,
                 'balance_centavos' => 0,
+                'confirmed_delivery_date' => $lockedRfq->proposed_delivery_date ?? $lockedRfq->requested_delivery_date,
                 'validity_hours' => $validityHours,
                 'terms' => $terms,
                 'created_by' => $admin->id,
@@ -253,6 +254,9 @@ class QuotationService
                 'deposit_percent' => Quotation::DEFAULT_DEPOSIT_PERCENT,
                 'deposit_centavos' => $totals['deposit_centavos'],
                 'balance_centavos' => $totals['balance_centavos'],
+                'confirmed_delivery_date' => array_key_exists('confirmed_delivery_date', $attributes)
+                    ? $attributes['confirmed_delivery_date']
+                    : $locked->confirmed_delivery_date,
                 'validity_hours' => (int) $attributes['validity_hours'],
                 'terms' => (string) ($attributes['terms'] ?? ''),
             ])->save();
@@ -465,6 +469,7 @@ class QuotationService
                 'deposit_percent' => $source->deposit_percent,
                 'deposit_centavos' => $source->deposit_centavos,
                 'balance_centavos' => $source->balance_centavos,
+                'confirmed_delivery_date' => $source->confirmed_delivery_date,
                 'validity_hours' => $source->validity_hours,
                 'terms' => $source->terms,
                 'created_by' => $admin->id,
