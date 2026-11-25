@@ -14,7 +14,13 @@ class PublicProductController extends Controller
 
     public function index(IndexPublicProductRequest $request): PublicProductCollection
     {
-        return new PublicProductCollection($this->catalog->paginatePublished($request->validated()));
+        return (new PublicProductCollection(
+            $this->catalog->paginatePublished($request->validated()),
+        ))->additional([
+            'meta' => [
+                'category_counts' => $this->catalog->publishedCategoryCounts(),
+            ],
+        ]);
     }
 
     public function show(string $slug): PublicProductResource

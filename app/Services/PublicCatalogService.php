@@ -21,7 +21,8 @@ class PublicCatalogService
             $query->where(function (Builder $query) use ($search): void {
                 $query->whereLike('name', '%'.$search.'%')
                     ->orWhereLike('slug', '%'.$search.'%')
-                    ->orWhereLike('category', '%'.$search.'%');
+                    ->orWhereLike('category', '%'.$search.'%')
+                    ->orWhereLike('specs', '%'.$search.'%');
             });
         }
 
@@ -29,8 +30,21 @@ class PublicCatalogService
             $query->where('category', $filters['category']);
         }
 
-        return $query->orderByDesc('id')->paginate($filters['per_page'] ?? 100)
+        return $query->orderByDesc('id')->paginate($filters['per_page'] ?? 12)
             ->appends(array_filter($filters, fn (mixed $value): bool => $value !== null));
+    }
+
+    /** @return array<string, int> */
+    public function publishedCategoryCounts(): array
+    {
+        return Product::query()
+            ->where('status', 'Published')
+            ->selectRaw('category, count(*) as aggregate')
+            ->groupBy('category')
+            ->orderBy('category')
+            ->pluck('aggregate', 'category')
+            ->map(fn (mixed $count): int => (int) $count)
+            ->all();
     }
 
     public function findPublishedBySlug(string $slug): Product

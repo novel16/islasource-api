@@ -365,6 +365,31 @@ it('accepts maximum validation boundaries and a page size of 100', function () {
     $this->getJson('/api/v1/admin/products?per_page=100')->assertOk()->assertJsonPath('meta.per_page', 100);
 });
 
+it('paginates public seafood at 12 per page by default and includes published category counts', function () {
+    Product::factory()->count(10)->create(['category' => 'Fresh seafood', 'status' => 'Published']);
+    Product::factory()->count(5)->create(['category' => 'Dried seafood', 'status' => 'Published']);
+    Product::factory()->create(['category' => 'Frozen seafood', 'status' => 'Draft']);
+
+    $this->getJson('/api/v1/seafood')
+        ->assertOk()
+        ->assertJsonCount(12, 'data')
+        ->assertJsonPath('meta.current_page', 1)
+        ->assertJsonPath('meta.per_page', 12)
+        ->assertJsonPath('meta.last_page', 2)
+        ->assertJsonPath('meta.total', 15)
+        ->assertJsonPath('meta.category_counts', [
+            'Dried seafood' => 5,
+            'Fresh seafood' => 10,
+        ]);
+
+    $this->getJson('/api/v1/seafood?page=2')
+        ->assertOk()
+        ->assertJsonCount(3, 'data')
+        ->assertJsonPath('meta.current_page', 2)
+        ->assertJsonPath('meta.per_page', 12)
+        ->assertJsonPath('meta.total', 15);
+});
+
 it('uses the existing admin API rate limit for product requests', function () {
     $this->freezeTime();
     $this->withToken(productAdminToken());
