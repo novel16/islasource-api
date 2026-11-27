@@ -1,5 +1,8 @@
 <?php
 
+use App\Mail\OrderPaidCustomerMail;
+use App\Mail\QuotationSentMail;
+use App\Models\Order;
 use App\Models\Quotation;
 use App\Models\QuotationItem;
 use App\Models\Rfq;
@@ -156,3 +159,33 @@ it('blocks accepting or declining expired, superseded, or cancelled quotations',
     'superseded' => ['Superseded', false],
     'cancelled' => ['Cancelled', false],
 ]);
+
+it('renders Free instead of PHP 0.00 in quotation and order receipt emails when delivery is zero', function () {
+    $rfq = Rfq::factory()->create(['delivery_location' => 'Bantayan Island (Madridejos) — Poblacion']);
+    $quotation = Quotation::factory()->for($rfq)->create([
+        'subtotal_centavos' => 150_000,
+        'delivery_centavos' => 0,
+        'total_centavos' => 150_000,
+    ]);
+    QuotationItem::factory()->for($quotation)->create([
+        'is_available' => true,
+        'line_selling_centavos' => 150_000,
+    ]);
+    $quotation->load(['rfq', 'items']);
+
+    $quoteHtml = (new QuotationSentMail($quotation, 'http://localhost:3000/quote/'.str_repeat('a', 64)))->render();
+    expect($quoteHtml)->toContain('Free');
+    expect($quoteHtml)->not->toContain('PHP 0.00');
+
+    $order = Order::factory()->for($quotation)->for($rfq)->create([
+        'subtotal_centavos' => 150_000,
+        'delivery_centavos' => 0,
+        'total_centavos' => 150_000,
+        'paid_centavos' => 150_000,
+    ]);
+    $order->load(['quotation.items']);
+
+    $orderHtml = (new OrderPaidCustomerMail($order, 'http://localhost:3000/order/'.str_repeat('b', 64)))->render();
+    expect($orderHtml)->toContain('Free');
+    expect($orderHtml)->not->toContain('PHP 0.00');
+});

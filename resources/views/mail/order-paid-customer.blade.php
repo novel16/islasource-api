@@ -49,7 +49,7 @@
                     </tr>
                     <tr>
                         <td style="color:#55665d;">Delivery</td>
-                        <td style="text-align:right;">{{ $formatPeso($order->delivery_centavos) }}</td>
+                        <td style="text-align:right;">{{ $order->delivery_centavos > 0 ? $formatPeso($order->delivery_centavos) : 'Free' }}</td>
                     </tr>
                     <tr>
                         <td style="padding-top:10px;border-top:1px solid #dfe5da;font-weight:700;font-size:16px;">Total Paid (QR Ph)</td>

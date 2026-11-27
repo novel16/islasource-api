@@ -12,7 +12,7 @@ Items:
 @endforeach
 
 Subtotal: {{ $formatPeso($order->subtotal_centavos) }}
-Delivery: {{ $formatPeso($order->delivery_centavos) }}
+Delivery: {{ $order->delivery_centavos > 0 ? $formatPeso($order->delivery_centavos) : 'Free' }}
 Total Paid: {{ $formatPeso($order->paid_centavos) }}
 
 Track your order here:

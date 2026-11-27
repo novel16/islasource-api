@@ -21,7 +21,7 @@ Currently unavailable (not charged):
 @endif
 
 Seafood subtotal: {{ $formatPeso($quotation->subtotal_centavos) }}
-Delivery: {{ $formatPeso($quotation->delivery_centavos) }}
+Delivery: {{ $quotation->delivery_centavos > 0 ? $formatPeso($quotation->delivery_centavos) : 'Free' }}
 Total quotation (Full payment via QR Ph): {{ $formatPeso($quotation->total_centavos) }}
 @if($validUntilManila)
 Valid until: {{ $validUntilManila }}
