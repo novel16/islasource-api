@@ -41,4 +41,20 @@ class AuthController extends Controller
 
         return response()->noContent();
     }
+
+    public function changePassword(Request $request): Response
+    {
+        $validated = $request->validate([
+            'current_password' => ['required', 'string', 'max:1024'],
+            'password' => ['required', 'string', 'min:8', 'max:1024', 'confirmed'],
+        ]);
+
+        $this->auth->changePassword(
+            $request->user(),
+            $validated['current_password'],
+            $validated['password'],
+        );
+
+        return response()->noContent();
+    }
 }

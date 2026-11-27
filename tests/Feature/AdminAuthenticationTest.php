@@ -124,6 +124,7 @@ it('returns JSON 401 without a bearer token on every protected auth endpoint', f
     'profile' => ['GET', '/me'],
     'logout' => ['POST', '/logout'],
     'logout all' => ['POST', '/logout-all'],
+    'change password' => ['POST', '/password'],
     'tokens' => ['GET', '/tokens'],
     'revoke token' => ['DELETE', '/tokens/1'],
 ]);
@@ -349,4 +350,32 @@ it('does not expose public account registration', function () {
 
 it('does not expose the Sanctum cookie bootstrap endpoint', function () {
     $this->get('/sanctum/csrf-cookie')->assertNotFound()->assertHeaderMissing('Set-Cookie');
+});
+
+it('changes admin password after verifying current password and revokes other device tokens', function () {
+    $admin = User::factory()->admin()->create(['password' => 'old-secret-pass']);
+    $currentToken = $admin->createToken('Current laptop', ['admin'])->plainTextToken;
+    $otherToken = $admin->createToken('Old phone', ['admin'])->plainTextToken;
+
+    $this->withToken($currentToken)->postJson('/api/v1/admin/auth/password', [
+        'current_password' => 'wrong-current',
+        'password' => 'new-secret-pass',
+        'password_confirmation' => 'new-secret-pass',
+    ])->assertUnprocessable()->assertJsonValidationErrors('current_password');
+
+    $this->withToken($currentToken)->postJson('/api/v1/admin/auth/password', [
+        'current_password' => 'old-secret-pass',
+        'password' => 'short',
+        'password_confirmation' => 'short',
+    ])->assertUnprocessable()->assertJsonValidationErrors('password');
+
+    $this->withToken($currentToken)->postJson('/api/v1/admin/auth/password', [
+        'current_password' => 'old-secret-pass',
+        'password' => '  new-secret-passphrase  ',
+        'password_confirmation' => '  new-secret-passphrase  ',
+    ])->assertNoContent();
+
+    expect(Hash::check('  new-secret-passphrase  ', $admin->fresh()->password))->toBeTrue();
+    expect($admin->tokens()->pluck('name')->all())->toBe(['Current laptop']);
+    expect($otherToken)->not->toBe($currentToken);
 });

@@ -27,6 +27,7 @@ Route::prefix('v1/admin/auth')->name('api.v1.admin.auth.')
                 Route::get('/me', [AuthController::class, 'me'])->name('me');
                 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
                 Route::post('/logout-all', [AuthController::class, 'logoutAll'])->name('logout-all');
+                Route::post('/password', [AuthController::class, 'changePassword'])->name('password');
                 Route::get('/tokens', [TokenController::class, 'index'])->name('tokens.index');
                 Route::delete('/tokens/{token}', [TokenController::class, 'destroy'])
                     ->whereNumber('token')->name('tokens.destroy');
