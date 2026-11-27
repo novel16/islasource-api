@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\Admin\Orders\OrderController as AdminOrderContro
 use App\Http\Controllers\Api\V1\Admin\Products\ProductController;
 use App\Http\Controllers\Api\V1\Admin\Products\ProductImageController;
 use App\Http\Controllers\Api\V1\Admin\Quotations\QuotationController as AdminQuotationController;
+use App\Http\Controllers\Api\V1\Admin\Reports\SalesReportController;
 use App\Http\Controllers\Api\V1\Admin\Rfqs\RfqController as AdminRfqController;
 use App\Http\Controllers\Api\V1\PublicCatalog\GuestOrderController;
 use App\Http\Controllers\Api\V1\PublicCatalog\GuestQuotationController;
@@ -97,4 +98,5 @@ Route::prefix('v1/admin')->name('api.v1.admin.')
         Route::get('/orders/{order}', [AdminOrderController::class, 'show'])->whereNumber('order')->name('orders.show');
         Route::patch('/orders/{order}', [AdminOrderController::class, 'update'])->whereNumber('order')->name('orders.update');
         Route::post('/orders/{order}/messages', [AdminOrderController::class, 'storeMessage'])->whereNumber('order')->name('orders.messages.store');
+        Route::get('/reports/sales', SalesReportController::class)->name('reports.sales');
     });
