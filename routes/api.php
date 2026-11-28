@@ -28,7 +28,8 @@ Route::prefix('v1/admin/auth')->name('api.v1.admin.auth.')
                 Route::get('/me', [AuthController::class, 'me'])->name('me');
                 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
                 Route::post('/logout-all', [AuthController::class, 'logoutAll'])->name('logout-all');
-                Route::post('/password', [AuthController::class, 'changePassword'])->name('password');
+                Route::post('/password', [AuthController::class, 'changePassword'])
+                    ->middleware('throttle:admin-password')->name('password');
                 Route::get('/tokens', [TokenController::class, 'index'])->name('tokens.index');
                 Route::delete('/tokens/{token}', [TokenController::class, 'destroy'])
                     ->whereNumber('token')->name('tokens.destroy');
@@ -40,33 +41,35 @@ Route::bind('archivedProduct', fn (string $id): Product => Product::onlyTrashed(
 Route::prefix('v1')->name('api.v1.')
     ->group(function (): void {
         Route::get('/seafood', [PublicProductController::class, 'index'])
-            ->middleware('throttle:60,1')->name('seafood.index');
+            ->middleware('throttle:public-catalog')->name('seafood.index');
         Route::get('/seafood/{slug}', [PublicProductController::class, 'show'])
-            ->where('slug', '[a-z0-9-]+')->middleware('throttle:60,1')->name('seafood.show');
+            ->where('slug', '[a-z0-9-]+')->middleware('throttle:public-catalog')->name('seafood.show');
+        Route::post('/quote-requests/send-code', [GuestRfqController::class, 'sendCode'])
+            ->middleware([PreventAuthResponseCaching::class, 'throttle:quote-otp'])->name('quote-requests.send-code');
         Route::post('/quote-requests', [GuestRfqController::class, 'store'])
-            ->middleware('throttle:6,1')->name('quote-requests.store');
+            ->middleware('throttle:quote-submit')->name('quote-requests.store');
         Route::middleware(PreventAuthResponseCaching::class)->group(function (): void {
             Route::get('/quote-requests/schedule/{token}', [GuestRfqController::class, 'showSchedule'])
-                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:20,1')->name('quote-requests.schedule.show');
+                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:guest-read')->name('quote-requests.schedule.show');
             Route::post('/quote-requests/schedule/{token}/respond', [GuestRfqController::class, 'respondSchedule'])
-                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:10,1')->name('quote-requests.schedule.respond');
+                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:guest-action')->name('quote-requests.schedule.respond');
             Route::get('/quotations/{token}', [GuestQuotationController::class, 'show'])
-                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:20,1')->name('quotations.show');
+                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:guest-read')->name('quotations.show');
             Route::post('/quotations/{token}/accept', [GuestQuotationController::class, 'accept'])
-                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:10,1')->name('quotations.accept');
+                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:guest-action')->name('quotations.accept');
             Route::post('/quotations/{token}/decline', [GuestQuotationController::class, 'decline'])
-                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:10,1')->name('quotations.decline');
+                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:guest-action')->name('quotations.decline');
             Route::get('/orders/{token}', [GuestOrderController::class, 'show'])
-                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:20,1')->name('orders.show');
+                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:guest-read')->name('orders.show');
             Route::post('/orders/{token}/checkout', [GuestOrderController::class, 'checkout'])
-                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:10,1')->name('orders.checkout');
+                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:guest-action')->name('orders.checkout');
             Route::post('/orders/{token}/verify-payment', [GuestOrderController::class, 'verifyPayment'])
-                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:20,1')->name('orders.verify-payment');
+                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:guest-action')->name('orders.verify-payment');
             Route::post('/orders/{token}/messages', [GuestOrderController::class, 'storeMessage'])
-                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:15,1')->name('orders.messages.store');
+                ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:guest-action')->name('orders.messages.store');
         });
         Route::post('/webhooks/paymongo', [PayMongoWebhookController::class, 'handle'])
-            ->middleware('throttle:120,1')->name('webhooks.paymongo');
+            ->middleware('throttle:paymongo-webhook')->name('webhooks.paymongo');
     });
 
 Route::prefix('v1/admin')->name('api.v1.admin.')
@@ -79,24 +82,29 @@ Route::prefix('v1/admin')->name('api.v1.admin.')
         Route::delete('/products/{product}', [ProductController::class, 'destroy'])->whereNumber('product')->name('products.destroy');
         Route::post('/products/{archivedProduct}/restore', [ProductController::class, 'restore'])
             ->whereNumber('archivedProduct')->name('products.restore');
-        Route::post('/product-images', [ProductImageController::class, 'store'])->name('product-images.store');
+        Route::post('/product-images', [ProductImageController::class, 'store'])
+            ->middleware('throttle:admin-heavy')->name('product-images.store');
         Route::get('/rfqs', [AdminRfqController::class, 'index'])->name('rfqs.index');
         Route::get('/rfqs/{rfq}', [AdminRfqController::class, 'show'])->whereNumber('rfq')->name('rfqs.show');
         Route::patch('/rfqs/{rfq}', [AdminRfqController::class, 'update'])->whereNumber('rfq')->name('rfqs.update');
         Route::post('/rfqs/{rfq}/notes', [AdminRfqController::class, 'storeNote'])->whereNumber('rfq')->name('rfqs.notes.store');
-        Route::post('/rfqs/{rfq}/supply-notice', [AdminRfqController::class, 'sendSupplyNotice'])->whereNumber('rfq')->name('rfqs.supply-notice');
+        Route::post('/rfqs/{rfq}/supply-notice', [AdminRfqController::class, 'sendSupplyNotice'])
+            ->whereNumber('rfq')->middleware('throttle:admin-heavy')->name('rfqs.supply-notice');
         Route::post('/rfqs/{rfq}/quotations', [AdminQuotationController::class, 'store'])->whereNumber('rfq')->name('rfqs.quotations.store');
         Route::get('/quotations', [AdminQuotationController::class, 'index'])->name('quotations.index');
         Route::get('/quotations/{quotation}', [AdminQuotationController::class, 'show'])->whereNumber('quotation')->name('quotations.show');
         Route::patch('/quotations/{quotation}', [AdminQuotationController::class, 'update'])->whereNumber('quotation')->name('quotations.update');
         Route::delete('/quotations/{quotation}', [AdminQuotationController::class, 'destroy'])->whereNumber('quotation')->name('quotations.destroy');
-        Route::post('/quotations/{quotation}/send', [AdminQuotationController::class, 'send'])->whereNumber('quotation')->name('quotations.send');
-        Route::post('/quotations/{quotation}/resend', [AdminQuotationController::class, 'resend'])->whereNumber('quotation')->name('quotations.resend');
+        Route::post('/quotations/{quotation}/send', [AdminQuotationController::class, 'send'])
+            ->whereNumber('quotation')->middleware('throttle:admin-heavy')->name('quotations.send');
+        Route::post('/quotations/{quotation}/resend', [AdminQuotationController::class, 'resend'])
+            ->whereNumber('quotation')->middleware('throttle:admin-heavy')->name('quotations.resend');
         Route::post('/quotations/{quotation}/cancel', [AdminQuotationController::class, 'cancel'])->whereNumber('quotation')->name('quotations.cancel');
         Route::post('/quotations/{quotation}/revise', [AdminQuotationController::class, 'revise'])->whereNumber('quotation')->name('quotations.revise');
         Route::get('/orders', [AdminOrderController::class, 'index'])->name('orders.index');
         Route::get('/orders/{order}', [AdminOrderController::class, 'show'])->whereNumber('order')->name('orders.show');
         Route::patch('/orders/{order}', [AdminOrderController::class, 'update'])->whereNumber('order')->name('orders.update');
-        Route::post('/orders/{order}/messages', [AdminOrderController::class, 'storeMessage'])->whereNumber('order')->name('orders.messages.store');
+        Route::post('/orders/{order}/messages', [AdminOrderController::class, 'storeMessage'])
+            ->whereNumber('order')->middleware('throttle:admin-heavy')->name('orders.messages.store');
         Route::get('/reports/sales', SalesReportController::class)->name('reports.sales');
     });

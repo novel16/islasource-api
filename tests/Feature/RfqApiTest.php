@@ -7,6 +7,7 @@ use App\Models\Rfq;
 use App\Models\RfqItem;
 use App\Models\User;
 use App\Policies\RfqPolicy;
+use App\Services\QuoteOtpService;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -214,6 +215,7 @@ it('returns 404 for unknown RFQ identifiers on update and notes endpoints', func
 
 it('keeps guest RFQ submission public response free of internal fields', function () {
     $product = Product::factory()->create(['status' => 'Published', 'min_order_quantity' => '1.000']);
+    $code = app(QuoteOtpService::class)->issueCode('maia@example.com');
 
     $response = $this->postJson('/api/v1/quote-requests', [
         'customer_name' => 'Maia Reyes',
@@ -223,6 +225,7 @@ it('keeps guest RFQ submission public response free of internal fields', functio
         'requested_delivery_date' => null,
         'notes' => 'Medium size please.',
         'terms_accepted' => true,
+        'verification_code' => $code,
         'items' => [[
             'product_id' => $product->id,
             'name' => $product->name,
@@ -237,6 +240,7 @@ it('keeps guest RFQ submission public response free of internal fields', functio
 });
 
 it('enforces a maximum of 10 items on guest quote requests', function () {
+    $code = app(QuoteOtpService::class)->issueCode('maia@example.com');
     $items = collect(range(1, 11))->map(fn (int $index): array => [
         'product_id' => null,
         'name' => "Seafood item {$index}",
@@ -253,6 +257,7 @@ it('enforces a maximum of 10 items on guest quote requests', function () {
         'requested_delivery_date' => null,
         'notes' => '',
         'terms_accepted' => true,
+        'verification_code' => $code,
         'items' => $items,
     ])->assertUnprocessable()->assertJsonValidationErrors('items');
 
@@ -261,6 +266,7 @@ it('enforces a maximum of 10 items on guest quote requests', function () {
 
 it('emails the customer with their reference number and notifies only active admins when a guest submits a quote request', function () {
     Mail::fake();
+    $code = app(QuoteOtpService::class)->issueCode('maia@example.com');
 
     $activeAdminOne = User::factory()->admin()->create(['email' => 'admin1@islasource.test']);
     $activeAdminTwo = User::factory()->admin()->create(['email' => 'admin2@islasource.test']);
@@ -282,6 +288,7 @@ it('emails the customer with their reference number and notifies only active adm
         'requested_delivery_date' => '2026-12-05',
         'notes' => 'Please pack per 1 kg.',
         'terms_accepted' => true,
+        'verification_code' => $code,
         'items' => [[
             'product_id' => $product->id,
             'name' => $product->name,
@@ -321,6 +328,7 @@ it('emails the customer with their reference number and notifies only active adm
 });
 
 it('still saves the guest quote request if email delivery fails', function () {
+    $code = app(QuoteOtpService::class)->issueCode('maia@example.com');
     $originalMailer = Mail::getFacadeRoot();
     Mail::shouldReceive('to')->andThrow(new RuntimeException('SMTP connection refused'));
 
@@ -336,6 +344,7 @@ it('still saves the guest quote request if email delivery fails', function () {
             'requested_delivery_date' => null,
             'notes' => '',
             'terms_accepted' => true,
+            'verification_code' => $code,
             'items' => [[
                 'product_id' => $product->id,
                 'name' => $product->name,

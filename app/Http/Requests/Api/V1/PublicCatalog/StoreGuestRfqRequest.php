@@ -32,6 +32,8 @@ class StoreGuestRfqRequest extends FormRequest
             'requested_delivery_date' => ['nullable', 'date', 'after_or_equal:today'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'terms_accepted' => ['accepted'],
+            'verification_code' => ['required', 'string', 'regex:/\A[0-9]{6}\z/'],
+            'website' => ['nullable', 'string', 'max:0'],
             'items' => ['required', 'array', 'min:1', 'max:10'],
             'items.*' => ['required', 'array:product_id,name,quantity,unit,notes'],
             'items.*.product_id' => [
@@ -53,7 +55,7 @@ class StoreGuestRfqRequest extends FormRequest
             $this->merge(['email' => strtolower(trim($this->input('email')))]);
         }
 
-        foreach (['customer_name', 'phone', 'location', 'notes'] as $field) {
+        foreach (['customer_name', 'phone', 'location', 'notes', 'verification_code', 'website'] as $field) {
             if (is_string($this->input($field))) {
                 $this->merge([$field => trim($this->input($field))]);
             }
