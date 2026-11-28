@@ -48,10 +48,18 @@ class ProductService
     public function create(array $attributes): Product
     {
         return $this->withSlugTransaction(function () use ($attributes): Product {
+            $hasGallery = array_key_exists('gallery_images', $attributes);
+            $gallery = $hasGallery && is_array($attributes['gallery_images']) ? $attributes['gallery_images'] : [];
+            unset($attributes['gallery_images']);
+
             $product = Product::query()->create($this->normalize($attributes));
             $this->claimSlug($product, $product->slug);
 
-            return $product->refresh()->load('slugs');
+            if ($hasGallery) {
+                $this->syncGallery($product, $gallery);
+            }
+
+            return $product->refresh()->load(['slugs', 'galleryImages']);
         });
     }
 
@@ -59,11 +67,19 @@ class ProductService
     public function update(Product $product, array $attributes): Product
     {
         return $this->withSlugTransaction(function () use ($product, $attributes): Product {
+            $hasGallery = array_key_exists('gallery_images', $attributes);
+            $gallery = $hasGallery && is_array($attributes['gallery_images']) ? $attributes['gallery_images'] : [];
+            unset($attributes['gallery_images']);
+
             $product = Product::query()->lockForUpdate()->findOrFail($product->id);
             $this->claimSlug($product, $attributes['slug'] ?? $product->slug);
             $product->fill($this->normalize($attributes, $product))->save();
 
-            return $product->refresh()->load('slugs');
+            if ($hasGallery) {
+                $this->syncGallery($product, $gallery);
+            }
+
+            return $product->refresh()->load(['slugs', 'galleryImages']);
         });
     }
 
@@ -80,7 +96,7 @@ class ProductService
             $product = Product::onlyTrashed()->lockForUpdate()->findOrFail($product->id);
             $product->restore();
 
-            return $product->refresh()->load('slugs');
+            return $product->refresh()->load(['slugs', 'galleryImages']);
         });
     }
 
@@ -119,5 +135,23 @@ class ProductService
         }
 
         return $attributes;
+    }
+
+    /** @param array<int, array<string, mixed>> $gallery */
+    private function syncGallery(Product $product, array $gallery): void
+    {
+        $product->galleryImages()->delete();
+
+        foreach (array_values(array_slice($gallery, 0, Product::MAX_GALLERY_IMAGES)) as $index => $entry) {
+            $alt = isset($entry['image_alt']) && is_string($entry['image_alt'])
+                ? trim($entry['image_alt'])
+                : '';
+
+            $product->galleryImages()->create([
+                'image' => trim((string) $entry['image']),
+                'image_alt' => $alt !== '' ? $alt : $product->name,
+                'sort_order' => $index,
+            ]);
+        }
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Resources\Api\V1\PublicCatalog;
 
 use App\Models\Product;
+use App\Models\ProductImage;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -30,6 +31,11 @@ class PublicProductResource extends JsonResource
             'og_description' => $this->og_description ?? '',
             'image' => $this->image,
             'image_alt' => $this->image_alt,
+            'gallery_images' => $this->whenLoaded('galleryImages', fn (): array => $this->galleryImages
+                ->map(fn (ProductImage $img): array => [
+                    'image' => $img->image,
+                    'image_alt' => $img->image_alt ?? $this->name,
+                ])->values()->all()),
             'og_image' => $this->og_image ?? '',
             'canonical_url' => $this->canonical_url ?? '',
             'indexable' => $this->indexable,

@@ -95,7 +95,7 @@ it('creates a persisted product with exact safe resource fields and defaults', f
         'id', 'name', 'category', 'unit', 'status', 'description', 'specs', 'slug',
         'meta_title', 'meta_description', 'og_title', 'og_description', 'image', 'image_alt',
         'og_image', 'canonical_url', 'indexable', 'min_order_quantity', 'availability_note',
-        'previous_slugs', 'created_at', 'updated_at', 'deleted_at',
+        'gallery_images', 'previous_slugs', 'created_at', 'updated_at', 'deleted_at',
     ]);
     $this->assertDatabaseHas('products', ['id' => $response->json('data.id'), 'slug' => 'fresh-squid', 'deleted_at' => null]);
     $this->assertDatabaseHas('product_slugs', ['product_id' => $response->json('data.id'), 'slug' => 'fresh-squid']);

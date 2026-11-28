@@ -32,7 +32,7 @@ class ProductController extends Controller
     {
         Gate::authorize('view', $product);
 
-        return new ProductResource($product->load('slugs'));
+        return new ProductResource($product->load(['slugs', 'galleryImages']));
     }
 
     public function update(SaveProductRequest $request, Product $product): ProductResource

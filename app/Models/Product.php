@@ -25,6 +25,8 @@ class Product extends Model
 
     public const array STATUSES = ['Draft', 'Published', 'Hidden'];
 
+    public const int MAX_GALLERY_IMAGES = 7;
+
     /** @return array<string, string> */
     protected function casts(): array
     {
@@ -35,5 +37,11 @@ class Product extends Model
     public function slugs(): HasMany
     {
         return $this->hasMany(ProductSlug::class)->orderBy('id');
+    }
+
+    /** @return HasMany<ProductImage, $this> */
+    public function galleryImages(): HasMany
+    {
+        return $this->hasMany(ProductImage::class)->orderBy('sort_order')->orderBy('id');
     }
 }

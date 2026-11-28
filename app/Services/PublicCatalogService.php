@@ -55,7 +55,7 @@ class PublicCatalogService
                 $query->where('slug', $slug)
                     ->orWhereHas('slugs', fn (Builder $slugs): Builder => $slugs->where('slug', $slug));
             })
-            ->with('slugs')
+            ->with(['slugs', 'galleryImages'])
             ->first();
 
         if ($product === null) {
