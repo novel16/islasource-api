@@ -22,6 +22,7 @@ class QuotationService
     public function __construct(
         private readonly QuotationCalculator $calculator,
         private readonly OrderService $orders,
+        private readonly SiteSettingService $settings,
     ) {}
 
     public function shareUrl(Quotation $quotation): ?string
@@ -138,27 +139,49 @@ class QuotationService
             }
 
             $nextVersion = ((int) $lockedRfq->quotations()->max('version')) + 1;
+            $cfg = $this->settings->all();
+            $isIsland = str_starts_with(strtolower(trim((string) $lockedRfq->delivery_location)), 'bantayan island');
+
             $depositPercent = Quotation::DEFAULT_DEPOSIT_PERCENT;
-            $validityHours = isset($defaults['validity_hours']) ? (int) $defaults['validity_hours'] : Quotation::DEFAULT_VALIDITY_HOURS;
+            $handlingCentavos = isset($defaults['handling_centavos'])
+                ? (int) $defaults['handling_centavos']
+                : (int) $cfg['default_handling_centavos'];
+            $markupPercent = isset($defaults['markup_percent'])
+                ? number_format((float) $defaults['markup_percent'], 2, '.', '')
+                : (string) $cfg['default_markup_percent'];
+            $deliveryCentavos = isset($defaults['delivery_centavos'])
+                ? (int) $defaults['delivery_centavos']
+                : ($isIsland ? 0 : (int) $cfg['default_cebu_delivery_centavos']);
+            $validityHours = isset($defaults['validity_hours'])
+                ? (int) $defaults['validity_hours']
+                : (int) $cfg['default_validity_hours'];
             $terms = isset($defaults['terms']) && trim((string) $defaults['terms']) !== ''
                 ? trim((string) $defaults['terms'])
-                : Quotation::DEFAULT_TERMS;
+                : (string) $cfg['default_quotation_terms'];
+
+            $totals = $this->calculator->calculate(
+                items: [],
+                handlingCentavos: $handlingCentavos,
+                markupPercent: $markupPercent,
+                deliveryCentavos: $deliveryCentavos,
+                depositPercent: $depositPercent,
+            );
 
             $quotation = Quotation::query()->create([
                 'rfq_id' => $lockedRfq->id,
                 'reference' => 'QT-'.now()->format('Y').'-'.Str::upper(Str::random(8)),
                 'version' => $nextVersion,
                 'status' => 'Draft',
-                'seafood_cost_centavos' => 0,
-                'handling_centavos' => 0,
-                'markup_percent' => '20.00',
-                'markup_centavos' => 0,
-                'subtotal_centavos' => 0,
-                'delivery_centavos' => 0,
-                'total_centavos' => 0,
+                'seafood_cost_centavos' => $totals['seafood_cost_centavos'],
+                'handling_centavos' => $totals['handling_centavos'],
+                'markup_percent' => $markupPercent,
+                'markup_centavos' => $totals['markup_centavos'],
+                'subtotal_centavos' => $totals['subtotal_centavos'],
+                'delivery_centavos' => $totals['delivery_centavos'],
+                'total_centavos' => $totals['total_centavos'],
                 'deposit_percent' => $depositPercent,
-                'deposit_centavos' => 0,
-                'balance_centavos' => 0,
+                'deposit_centavos' => $totals['deposit_centavos'],
+                'balance_centavos' => $totals['balance_centavos'],
                 'confirmed_delivery_date' => $lockedRfq->proposed_delivery_date ?? $lockedRfq->requested_delivery_date,
                 'validity_hours' => $validityHours,
                 'terms' => $terms,

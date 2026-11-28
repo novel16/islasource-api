@@ -8,10 +8,12 @@ use App\Http\Controllers\Api\V1\Admin\Products\ProductImageController;
 use App\Http\Controllers\Api\V1\Admin\Quotations\QuotationController as AdminQuotationController;
 use App\Http\Controllers\Api\V1\Admin\Reports\SalesReportController;
 use App\Http\Controllers\Api\V1\Admin\Rfqs\RfqController as AdminRfqController;
+use App\Http\Controllers\Api\V1\Admin\Settings\SiteSettingController;
 use App\Http\Controllers\Api\V1\PublicCatalog\GuestOrderController;
 use App\Http\Controllers\Api\V1\PublicCatalog\GuestQuotationController;
 use App\Http\Controllers\Api\V1\PublicCatalog\GuestRfqController;
 use App\Http\Controllers\Api\V1\PublicCatalog\PublicProductController;
+use App\Http\Controllers\Api\V1\PublicCatalog\PublicSiteSettingController;
 use App\Http\Controllers\Api\V1\Webhooks\PayMongoWebhookController;
 use App\Http\Middleware\EnsureActiveAdmin;
 use App\Http\Middleware\PreventAuthResponseCaching;
@@ -40,6 +42,8 @@ Route::bind('archivedProduct', fn (string $id): Product => Product::onlyTrashed(
 
 Route::prefix('v1')->name('api.v1.')
     ->group(function (): void {
+        Route::get('/site-settings', [PublicSiteSettingController::class, 'show'])
+            ->middleware('throttle:public-catalog')->name('site-settings.show');
         Route::get('/seafood', [PublicProductController::class, 'index'])
             ->middleware('throttle:public-catalog')->name('seafood.index');
         Route::get('/seafood/{slug}', [PublicProductController::class, 'show'])
@@ -107,4 +111,7 @@ Route::prefix('v1/admin')->name('api.v1.admin.')
         Route::post('/orders/{order}/messages', [AdminOrderController::class, 'storeMessage'])
             ->whereNumber('order')->middleware('throttle:admin-heavy')->name('orders.messages.store');
         Route::get('/reports/sales', SalesReportController::class)->name('reports.sales');
+        Route::get('/settings', [SiteSettingController::class, 'show'])->name('settings.show');
+        Route::put('/settings', [SiteSettingController::class, 'update'])->name('settings.update');
+        Route::post('/settings/reset', [SiteSettingController::class, 'reset'])->name('settings.reset');
     });
